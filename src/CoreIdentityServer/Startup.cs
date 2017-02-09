@@ -12,6 +12,9 @@ using Microsoft.Extensions.Logging;
 using CoreIdentityServer.Data;
 using CoreIdentityServer.Models;
 using CoreIdentityServer.Services;
+using System.Reflection;
+using IdentityServer4.EntityFramework.DbContexts;
+using IdentityServer4.EntityFramework.Mappers;
 
 namespace CoreIdentityServer
 {
@@ -49,22 +52,35 @@ namespace CoreIdentityServer
 
             services.AddMvc();
 
+
+            var connectionString = @"server=(localdb)\mssqllocaldb;Database=aspnet-CoreIdentityServer-738b114d-7766-460d-bc8d-d6235f92a19d;Trusted_Connection=True;MultipleActiveResultSets=true";
+            var migrationsAssembly = typeof(Startup).GetTypeInfo().Assembly.GetName().Name;
+
+
             // Add application services.
             services.AddTransient<IEmailSender, AuthMessageSender>();
             services.AddTransient<ISmsSender, AuthMessageSender>();
 
             // Adds IdentityServer
+            // configure identity server with in-memory users, but EF stores for clients and resources
             services.AddIdentityServer()
                 .AddTemporarySigningCredential()
-                .AddInMemoryIdentityResources(Config.GetIdentityResources())
-                .AddInMemoryApiResources(Config.GetApiResources())
-                .AddInMemoryClients(Config.GetClients())
+                .AddTestUsers(Config.GetUsers())
+                .AddConfigurationStore(builder =>
+                    builder.UseSqlServer(connectionString, options =>
+                        options.MigrationsAssembly(migrationsAssembly)))
+                .AddOperationalStore(builder =>
+                    builder.UseSqlServer(connectionString, options =>
+                        options.MigrationsAssembly(migrationsAssembly)))
                 .AddAspNetIdentity<ApplicationUser>();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, IHostingEnvironment env, ILoggerFactory loggerFactory)
         {
+            // this will do the initial DB population
+            InitializeDatabase(app);
+
             loggerFactory.AddConsole(Configuration.GetSection("Logging"));
             loggerFactory.AddDebug();
 
@@ -94,6 +110,42 @@ namespace CoreIdentityServer
                     name: "default",
                     template: "{controller=Home}/{action=Index}/{id?}");
             });
+        }
+        private void InitializeDatabase(IApplicationBuilder app)
+        {
+            using (var serviceScope = app.ApplicationServices.GetService<IServiceScopeFactory>().CreateScope())
+            {
+                serviceScope.ServiceProvider.GetRequiredService<PersistedGrantDbContext>().Database.Migrate();
+
+                var context = serviceScope.ServiceProvider.GetRequiredService<ConfigurationDbContext>();
+                context.Database.Migrate();
+                if (!context.Clients.Any())
+                {
+                    foreach (var client in Config.GetClients())
+                    {
+                        context.Clients.Add(client.ToEntity());
+                    }
+                    context.SaveChanges();
+                }
+
+                if (!context.IdentityResources.Any())
+                {
+                    foreach (var resource in Config.GetIdentityResources())
+                    {
+                        context.IdentityResources.Add(resource.ToEntity());
+                    }
+                    context.SaveChanges();
+                }
+
+                if (!context.ApiResources.Any())
+                {
+                    foreach (var resource in Config.GetApiResources())
+                    {
+                        context.ApiResources.Add(resource.ToEntity());
+                    }
+                    context.SaveChanges();
+                }
+            }
         }
     }
 }

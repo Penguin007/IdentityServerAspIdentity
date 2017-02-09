@@ -90,24 +90,24 @@ namespace CoreIdentityServer
 
                 new TestUser {
                     SubjectId = "1",
-                    Username = "alice",
-                    Password = "password",
+                    Username = "matt",
+                    Password = "Matt123@",
 
                     Claims = new []
                     {
                         new Claim("name", "Alice"),
-                        new Claim("website", "https://alice.com")
+                        new Claim("website", "https://matt.com")
                     }
                 },
                 new TestUser {
                     SubjectId = "2",
-                    Username = "bob",
-                    Password = "password",
+                    Username = "cameron",
+                    Password = "Cam123@",
 
                     Claims = new []
                     {
                         new Claim("name", "Bob"),
-                        new Claim("website", "https://bob.com")
+                        new Claim("website", "https://cameron.com")
                     }
                 }
             };
